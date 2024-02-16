@@ -1,0 +1,81 @@
+%%capture
+!pip install mordred
+!pip install rdkit-pypi
+
+import rdkit
+from rdkit import Chem
+from rdkit.Chem import Draw, PandasTools, AllChem
+
+import mordred
+from mordred import Calculator, descriptors
+
+import pandas as pd
+from tqdm import tqdm
+
+import pandas as pd
+import warnings
+warnings.filterwarnings("ignore")
+
+from google.colab import files
+uploaded = files.upload()
+file_name = 'smiles-for-coformer.xlsx'
+df = pd.read_excel('smiles-for-coformer.xlsx')
+
+
+df.head()
+
+
+#Generate molecular objects from SMILES with hydrogens attached
+
+mol_list = []
+
+for smile in df['Smiles']:
+  mol = Chem.MolFromSmiles(smile)
+  mol= Chem.AddHs(mol)
+  mol_list.append(mol)
+
+df = pd.concat([df, pd.DataFrame(mol_list, columns = (['Mol']))], axis=1)
+
+df.head()
+
+
+#Create calculator object to calculate descriptors
+
+# Creating a descriptor calculator with all descriptors
+calc = Calculator(descriptors, ignore_3D=False)
+
+calc
+
+# calc.descriptors contains all the descriptor classes
+print(calc.descriptors)
+
+# print the names of descriptors
+all_descriptor_names = [desc.__class__.__name__ for desc in calc.descriptors]
+print (all_descriptor_names [:25])
+
+# checking the length of descriptors in the calculator
+len(all_descriptor_names)
+
+
+#Calculate 2D/3D descriptors for the whole dataset
+
+# Function to generate 3D coordinates using RDKit
+def generate_3d_coordinates(molecule):
+  AllChem.EmbedMolecule(molecule)
+  AllChem.MMFFOptimizeMolecule(molecule)
+
+# Iterate through molecules
+d =[]
+for mol in tqdm(df['Mol']):
+  generate_3d_coordinates(mol)
+
+# Calculate descriptors
+  result = calc(mol)
+  d.append(result)
+
+
+final_df = pd.concat([df[['Smiles']], pd.DataFrame(d, columns = (str(key) for key in result.keys()))], axis=1)
+
+final_df.head()
+
+final_df.to_excel('smiles-for-coformer-done.xlsx', index=None)
